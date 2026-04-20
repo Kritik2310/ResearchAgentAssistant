@@ -1,27 +1,26 @@
-def build_markdown_report(topic: str, sections: dict, citations: list):
+def build_markdown_report(topic: str, sections: dict, citations: list) -> str:
     md = []
 
-    # ---------------- Title ----------------
     md.append(f"# {topic}\n")
     md.append("---\n")
 
-    # ---------------- Abstract ----------------
     if sections.get("abstract"):
         md.append("## Abstract\n")
-        md.append(sections.get("abstract").strip() + "\n\n")
+        md.append(sections["abstract"].strip() + "\n\n")
 
-    # ---------------- Introduction ----------------
+    if sections.get("keywords"):
+        kws = sections["keywords"]
+        if isinstance(kws, list):
+            kws = ", ".join(kws)
+        md.append(f"**Keywords:** {kws}\n\n")
+
     if sections.get("introduction"):
         md.append("## Introduction\n")
-        md.append(sections.get("introduction").strip() + "\n\n")
+        md.append(sections["introduction"].strip() + "\n\n")
 
-    # ---------------- Literature Review ----------------
     if sections.get("literature_review"):
         md.append("## Literature Review\n")
-
-        # Can be list (per-paper) OR string (synthesized)
-        lr = ( sections.get("literature_review") or sections.get("literature"))
-
+        lr = sections["literature_review"]
         if isinstance(lr, list):
             for idx, entry in enumerate(lr, start=1):
                 title = entry.get("title", f"Study {idx}")
@@ -31,11 +30,9 @@ def build_markdown_report(topic: str, sections: dict, citations: list):
         else:
             md.append(lr.strip() + "\n\n")
 
-    # ---------------- Research Gaps ----------------
     if sections.get("research_gaps"):
         md.append("## Research Gaps\n")
-        gaps = (sections.get("research_gaps") or sections.get("research"))
-
+        gaps = sections["research_gaps"]
         if isinstance(gaps, list):
             for g in gaps:
                 md.append(f"- {g}\n")
@@ -43,32 +40,32 @@ def build_markdown_report(topic: str, sections: dict, citations: list):
             md.append(gaps.strip() + "\n")
         md.append("\n")
 
-    # ---------------- Methodology ----------------
     if sections.get("methodology"):
-        md.append("## Methodology\n")
-        md.append(sections.get("methodology").strip() + "\n\n")
+        md.append("## Proposed Methodology\n")
+        md.append(sections["methodology"].strip() + "\n\n")
 
-    # ---------------- Results ----------------
     if sections.get("results"):
         md.append("## Results and Discussion\n")
-        md.append(sections.get("results").strip() + "\n\n")
+        md.append(sections["results"].strip() + "\n\n")
 
-    # ---------------- Conclusion ----------------
     if sections.get("conclusion"):
         md.append("## Conclusion\n")
-        md.append(sections.get("conclusion").strip() + "\n\n")
+        md.append(sections["conclusion"].strip() + "\n\n")
 
-    # ---------------- References ----------------
     if citations:
         md.append("## References\n")
-        for c in citations:
-            authors = ", ".join(c.get("authors", ["Unknown"]))
+        for i, c in enumerate(citations, start=1):
+            authors_raw = c.get("authors", [])
+            if isinstance(authors_raw, list):
+                authors = ", ".join(a for a in authors_raw if a)
+            else:
+                authors = str(authors_raw)
             title = c.get("title", "Untitled")
             year = c.get("year", "n.d.")
             venue = c.get("journal", c.get("venue", ""))
             doi = c.get("doi", "")
-            ref = f"- {authors}, *{title}*, {venue}, {year}"
-            if doi:
+            ref = f"{i}. {authors or 'Unknown'}, *{title}*, {venue}, {year}"
+            if doi and doi != "N/A":
                 ref += f". DOI: {doi}"
             md.append(ref + "\n")
 

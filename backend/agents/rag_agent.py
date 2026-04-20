@@ -4,7 +4,7 @@ import requests
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from pypdf import PdfReader
-import google.generativeai as genai
+from sentence_transformers import SentenceTransformer
 import gc
 import time
 import hashlib
@@ -19,28 +19,24 @@ class ResearchRAG:
     """
     
     def __init__(
-        self, 
-        gemini_api_key: str,
-        max_memory_mb: int = 500,  # Max RAM to use (default 500MB)
-        max_pdf_size_mb: int = 10,  # Max individual PDF size
-        chunk_size: int = 800,  # Smaller chunks = better context granularity
-        chunk_overlap: int = 100
+        self,
+        max_memory_mb: int = 2048,
+        max_pdf_size_mb: int = 10,
+        chunk_size: int = 800,
+        chunk_overlap: int = 100,
+        embedding_model: str = "BAAI/bge-small-en-v1.5",
     ):
-        genai.configure(api_key=gemini_api_key)
-        self.embedding_model = "models/text-embedding-004"
+        # Local embedding model — no API key required
+        print(f"[RAG] Loading embedding model: {embedding_model}")
+        self._encoder = SentenceTransformer(embedding_model)
         self.vector_store: List[Dict[str, Any]] = []
-        
-        # Memory management
+
         self.max_memory_bytes = max_memory_mb * 1024 * 1024
         self.max_pdf_bytes = max_pdf_size_mb * 1024 * 1024
-        
-        # Chunking config
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        
-        # Cache for embeddings to avoid recomputation
         self._embedding_cache: Dict[str, np.ndarray] = {}
-        
+
         print(f"[RAG] Initialized with {max_memory_mb}MB memory limit")
         print(f"[RAG] Chunk size: {chunk_size}, Overlap: {chunk_overlap}")
 
@@ -557,13 +553,9 @@ class ResearchRAG:
                     
                     # Embed uncached texts
                     if uncached_texts:
-                        res = genai.embed_content(
-                            model=self.embedding_model,
-                            content=uncached_texts,
-                            task_type="RETRIEVAL_DOCUMENT",
+                        new_embeddings = self._encoder.encode(
+                            uncached_texts, normalize_embeddings=True
                         )
-                        
-                        new_embeddings = res["embedding"]
                         
                         # Cache new embeddings
                         for text, emb, idx in zip(uncached_texts, new_embeddings, uncached_indices):
@@ -607,13 +599,9 @@ class ResearchRAG:
             return self._embedding_cache[cache_key]
         
         # Compute new embedding
-        res = genai.embed_content(
-            model=self.embedding_model,
-            content=text,
-            task_type="RETRIEVAL_QUERY" if is_query else "RETRIEVAL_DOCUMENT",
+        emb = np.array(
+            self._encoder.encode(text, normalize_embeddings=True), dtype="float32"
         )
-        
-        emb = np.array(res["embedding"], dtype="float32")
         self._embedding_cache[cache_key] = emb
         
         return emb
@@ -714,20 +702,19 @@ class ResearchRAG:
         self.vector_store = unique_chunks
 
     def _check_memory_available(self) -> bool:
-        """Check if we have memory available"""
+        """Check if system has enough free RAM to continue"""
         try:
-            process = psutil.Process(os.getpid())
-            memory_usage = process.memory_info().rss
-            return memory_usage < self.max_memory_bytes
-        except:
-            return True  # If can't check, assume OK
+            free_mb = psutil.virtual_memory().available / 1024 / 1024
+            return free_mb > 300  # stop only if less than 300MB free on the whole system
+        except Exception:
+            return True
 
     def _get_memory_usage_mb(self) -> float:
         """Get current memory usage in MB"""
         try:
             process = psutil.Process(os.getpid())
             return process.memory_info().rss / 1024 / 1024
-        except:
+        except Exception:
             return 0.0
 
     def _empty_stats(self) -> Dict[str, Any]:

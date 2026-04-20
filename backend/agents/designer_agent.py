@@ -1,22 +1,15 @@
-from google.adk.agents import Agent
-from google.adk.memory import InMemoryMemoryService
-from google.adk.sessions import InMemorySessionService
-from pydantic import Field
-from typing import List, Dict, Any
+import logging
+from typing import List, Dict
 
 from tools import memory_store
 
+logger = logging.getLogger(__name__)
 
-class DesignerAgent(Agent):
-    memory: InMemoryMemoryService = Field(default_factory=InMemoryMemoryService)
-    session: InMemorySessionService = Field(default_factory=InMemorySessionService)
 
-    def __init__(self, **kwargs):
-        super().__init__(name="experiment_designer", **kwargs)
-
-    async def run(self, input_json):
+class DesignerAgent:
+    def run(self, input_json: dict) -> dict:
         topic = input_json["topic"]
-        
+
         mem_summaries = memory_store.get_summaries(topic)
         mem_gaps = memory_store.get_gaps(topic)
         mem_citations = memory_store.get_citations(topic)
@@ -24,155 +17,108 @@ class DesignerAgent(Agent):
         if mem_summaries["status"] != "ok":
             return {
                 "status": "error",
-                "message": "No summaries found in memory. Run retrieval + summarization first."
+                "message": "No summaries found in memory. Run retrieval + summarization first.",
             }
 
         summaries = mem_summaries["summaries"]
+        gaps = mem_gaps["gaps"] if mem_gaps["status"] == "ok" else [
+            g for s in summaries for g in s.get("gaps", [])
+        ]
 
-        if mem_gaps["status"] == "ok":
-            gaps = mem_gaps["gaps"]
-        else:
-            gaps = []
-            for s in summaries:
-                gaps.extend(s.get("gaps", []))
-
-        # ========== EXTRACT FROM ACTUAL PAPERS ==========
         datasets = self._extract_datasets(summaries)
-        evaluation_metrics = self._extract_metrics(summaries)
-        baseline_methods = self._extract_baselines(summaries)
-        hypothesis = self._generate_hypothesis(topic, gaps, summaries)
+        metrics = self._extract_metrics(summaries)
+        baselines = self._extract_baselines(summaries)
+        hypothesis = self._generate_hypothesis(topic, gaps)
 
         plan = {
             "topic": topic,
             "gaps": gaps,
             "hypothesis": hypothesis,
             "datasets": datasets,
-            "evaluation_metrics": evaluation_metrics,
-            "baseline_methods": baseline_methods,
+            "evaluation_metrics": metrics,
+            "baseline_methods": baselines,
             "implementation_notes": {
                 "seed": 42,
-                "environment": "Python + relevant frameworks for this domain"
+                "environment": "Python with domain-appropriate ML frameworks",
             },
-            "citations_used": mem_citations.get("citations", [])
+            "citations_used": mem_citations.get("citations", []),
         }
 
         memory_store.save_experiment_plan(topic, plan)
+        logger.info("Experiment plan generated for topic: %s", topic)
 
-        return {
-            "status": "ok",
-            "experiment_plan": plan
-        }
+        return {"status": "ok", "experiment_plan": plan}
 
-    # ========== HELPER METHODS ==========
+    # ------------------------------------------------------------------
 
-    def _generate_hypothesis(self, topic: str, gaps: List[str], summaries: List[Dict]) -> str:
-        """Generate hypothesis from actual research gaps"""
+    def _generate_hypothesis(self, topic: str, gaps: List[str]) -> str:
         if gaps:
-            first_gap = gaps[0][:200]  # Use first gap, truncate if too long
-            return f"Addressing {first_gap} will improve outcomes in {topic} research and applications."
-        
-        # Fallback if no gaps
-        return f"A comprehensive analysis of recent advances in {topic} will identify best practices and optimization opportunities."
+            return (
+                f"Addressing '{gaps[0][:180]}' will meaningfully advance "
+                f"outcomes in {topic} research and real-world applications."
+            )
+        return (
+            f"A comprehensive comparative analysis of recent advances in {topic} "
+            "will surface best practices and highlight underexplored optimization opportunities."
+        )
 
     def _extract_datasets(self, summaries: List[Dict]) -> List[Dict]:
-        """Extract datasets mentioned in papers"""
-        datasets = []
-        seen = set()
-        
-        for summary in summaries:
-            methods = summary.get("methods", [])
-            findings = summary.get("key_findings", [])
-            
-            # Look for dataset mentions
-            for text in methods + findings:
-                text_lower = text.lower()
-                if any(kw in text_lower for kw in ["dataset", "corpus", "benchmark", "collection"]):
+        datasets, seen = [], set()
+        for s in summaries:
+            for text in s.get("methods", []) + s.get("key_findings", []):
+                if any(kw in text.lower() for kw in ["dataset", "corpus", "benchmark", "collection"]):
                     if text not in seen and len(text) < 150:
                         datasets.append({
                             "name": text.strip(),
-                            "description": f"Dataset from: {summary.get('title', 'Unknown')[:50]}",
-                            "source": "Extracted from literature"
+                            "description": f"From: {s.get('title', 'Unknown')[:50]}",
+                            "source": "Extracted from literature",
                         })
                         seen.add(text)
-        
-        # Default if none found
         if not datasets:
             datasets.append({
-                "name": "Domain-appropriate dataset",
-                "description": "Dataset to be selected based on research requirements",
-                "source": "To be identified from literature or public repositories"
+                "name": "Domain-appropriate benchmark dataset",
+                "description": "To be selected based on research requirements",
+                "source": "Public repositories (Kaggle, HuggingFace, UCI)",
             })
-        
-        return datasets[:3]  # Limit to 3
+        return datasets[:3]
 
     def _extract_metrics(self, summaries: List[Dict]) -> List[Dict]:
-        """Extract evaluation metrics from papers"""
-        metrics = []
-        seen = set()
-        
-        # Common metrics
         metric_map = {
             "accuracy": ("Accuracy", "Higher is better"),
             "precision": ("Precision", "Higher is better"),
             "recall": ("Recall", "Higher is better"),
             "f1": ("F1 Score", "Higher is better"),
-            "auc": ("AUC", "Higher is better"),
+            "auc": ("AUC-ROC", "Higher is better"),
             "rmse": ("RMSE", "Lower is better"),
             "mae": ("MAE", "Lower is better"),
-            "loss": ("Loss", "Lower is better"),
-            "error": ("Error Rate", "Lower is better"),
             "bleu": ("BLEU Score", "Higher is better"),
             "rouge": ("ROUGE Score", "Higher is better"),
         }
-        
-        for summary in summaries:
-            findings = " ".join(summary.get("key_findings", []))
-            methods = " ".join(summary.get("methods", []))
-            combined = (findings + " " + methods).lower()
-            
-            for keyword, (name, interpretation) in metric_map.items():
-                if keyword in combined and name not in seen:
-                    metrics.append({
-                        "name": name,
-                        "interpretation": interpretation
-                    })
+        metrics, seen = [], set()
+        for s in summaries:
+            combined = " ".join(s.get("key_findings", []) + s.get("methods", [])).lower()
+            for kw, (name, interp) in metric_map.items():
+                if kw in combined and name not in seen:
+                    metrics.append({"name": name, "interpretation": interp})
                     seen.add(name)
-        
-        # Default metrics
         if not metrics:
             metrics = [
-                {"name": "Primary Performance Metric", "interpretation": "Domain-specific evaluation"},
-                {"name": "Secondary Quality Metric", "interpretation": "Domain-specific evaluation"}
+                {"name": "Primary Domain Metric", "interpretation": "Domain-specific evaluation"},
+                {"name": "Secondary Quality Metric", "interpretation": "Domain-specific evaluation"},
             ]
-        
-        return metrics[:5]  # Limit to 5
+        return metrics[:5]
 
     def _extract_baselines(self, summaries: List[Dict]) -> List[Dict]:
-        """Extract baseline methods from papers"""
-        baselines = []
-        seen = set()
-        
-        for summary in summaries:
-            methods = summary.get("methods", [])
-            findings = summary.get("key_findings", [])
-            
-            for text in methods + findings:
-                text_lower = text.lower()
-                
-                # Look for baseline indicators
-                if any(kw in text_lower for kw in ["baseline", "compared", "benchmark", "existing", "prior method", "traditional"]):
+        baselines, seen = [], set()
+        for s in summaries:
+            for text in s.get("methods", []) + s.get("key_findings", []):
+                if any(kw in text.lower() for kw in ["baseline", "compared", "benchmark", "existing", "prior", "traditional"]):
                     if text not in seen and len(text) < 150:
-                        baselines.append({
-                            "name": text.strip(),
-                            "reason": "Baseline from literature"
-                        })
+                        baselines.append({"name": text.strip(), "reason": "Identified baseline from literature"})
                         seen.add(text)
-        
-        # Default baseline
         if not baselines:
             baselines.append({
                 "name": "Current state-of-the-art approach",
-                "reason": "Standard baseline for comparison in this domain"
+                "reason": "Standard comparison point for this domain",
             })
-        
-        return baselines[:3]  # Limit to 3
+        return baselines[:3]

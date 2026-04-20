@@ -1,7 +1,28 @@
+# Environment & secrets
 .env
-.venv/
+.env.local
+*.env
+
+# Python
 __pycache__/
-*.pyc
-backend/data/
-*.zip
-*.md
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Generated outputs (research papers, zips)
+backend/outputs/*.md
+backend/outputs/*.zip
+backend/outputs/*.tex
+backend/outputs/*.docx
+
+# Runtime data (populated at runtime, not committed)
+backend/data/*.json
+
+# Personal documentation (not for repo)
+DOCUMENTATION.md
+
+# OS
+.DS_Store
+Thumbs.db

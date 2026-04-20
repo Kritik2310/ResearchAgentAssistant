@@ -1,148 +1,220 @@
-# AI Research Assistant  
-### *An Intelligent Multi-Agent System for Automated IEEE Research Paper Generation*
+# ResearchAgentAssistant
 
-> From **research idea → literature → experiment design → IEEE paper → Overleaf-ready ZIP**, all in one click.
+## *Automated IEEE Survey Paper Generation using Multi-Agent AI*
 
----
-
-## 🌟 Overview
-
-The **AI Research Paper Assistant** is a **multi-agent artificial intelligence system** that automates the complete academic research workflow.  
-It retrieves real research papers, summarizes them using LLMs, evaluates research quality, designs experiments, and finally generates **IEEE-formatted research papers** with a modern **web interface**.
-
-This project bridges the gap between **academic research** and **AI automation**, reducing weeks of work into minutes.
+> Enter a research topic. Get a fully written, IEEE-formatted survey paper with references — in minutes.
 
 ---
 
-## Key Capabilities
+## Overview
 
-✅ Automated **Research Paper Retrieval**   
-✅ **AI-Based Summarization & Gap Detection** 
-✅ **Research Quality Evaluation**  
-✅ **Experiment Design Automation**  
-✅ **IEEE Research Paper Generation**  
-✅ **Overleaf-Ready ZIP Export**  
-✅ **Download as Markdown & LaTeX**  
+**ResearchAgentAssistant** is a production-grade multi-agent AI system that automates the complete academic research pipeline. It retrieves real papers from ArXiv, reads and understands them using RAG (Retrieval-Augmented Generation), synthesizes findings using an LLM, evaluates quality, and produces a publication-ready **IEEE-format survey paper** — exported as both Markdown and an Overleaf-ready LaTeX ZIP.
+
+Built with **LangGraph** for orchestration, **LangChain** for structured LLM output, **Groq** as the inference backend, and **Streamlit** as the frontend.
+
+---
+
+## Key Features
+
+- Automated paper retrieval from ArXiv (no API key required)
+- RAG pipeline — downloads PDFs, chunks text, embeds with a local SentenceTransformer model
+- Structured LLM analysis — LangChain enforces typed output (no regex parsing)
+- LangGraph state machine — 6-node pipeline with typed state passing between agents
+- IEEE-format LaTeX export — complete `.tex` + `IEEEtran.cls` + `refs.bib` in a ZIP for Overleaf
+- Real-time progress stepper — frontend polls pipeline progress every second
+- Report history — all generated papers saved and accessible from the UI
+- Author information embedded in the LaTeX output (name, institution, email, city)
 
 ---
 
 ## System Architecture
 
-User → Streamlit UI
-↓
-FastAPI Backend
-↓
-Retrieval Agent → Summarizer Agent → Evaluator Agent
-↓
-Designer Agent → Report Writer Agent
-↓
-Markdown + IEEE LaTeX + Overleaf ZIP
+```text
+┌─────────────────────┐         ┌──────────────────────────────────────────┐
+│   Streamlit UI      │─ HTTP ─►│            FastAPI Backend               │
+│   frontend/app.py   │◄────────│            backend/app.py                │
+└─────────────────────┘         │                                          │
+                                │  ┌─────────────────────────────────────┐ │
+                                │  │       LangGraph State Machine        │ │
+                                │  │                                      │ │
+                                │  │  retrieve → ingest_rag → summarize   │ │
+                                │  │      → evaluate → persist_design     │ │
+                                │  │           → write_report → END       │ │
+                                │  └─────────────────────────────────────┘ │
+                                └──────────────────────────────────────────┘
+```
 
 ---
 
+## Agent Pipeline
 
-Each agent performs a **dedicated cognitive task**, closely mimicking how a real research team operates.
-
----
-
-## Agents in the System
-
-| Agent Name | Responsibility |
-|-----------|----------------|
-| Retrieval Agent | Fetches latest research papers |
-| Summarizer Agent | Generates structured summaries |
-| Evaluator Agent | Validates research quality |
-| Designer Agent | Designs experiments |
-| Report Writer Agent | Generates IEEE papers |
-| Memory Store | Persistent research memory |
-| History Manager | Stores past reports |
+| Step | Agent | Technology | Output |
+| ---- | ----- | ---------- | ------ |
+| 1 | **RetrievalAgent** | ArXiv API | 10 recent papers with metadata |
+| 2 | **ResearchRAG** | SentenceTransformer (local) | PDF chunks + vector embeddings |
+| 3 | **SummarizerAgent** | LangChain + Groq LLM | Per-paper analysis + full section synthesis |
+| 4 | **EvaluatorAgent** | LangChain + Groq LLM | Quality scores (1–5) per paper and overall |
+| 5 | **DesignerAgent** | Pure Python | Experiment plan (hypothesis, datasets, metrics) |
+| 6 | **ReportWriterAgent** | Pure Python | Markdown report + IEEE LaTeX report |
 
 ---
 
 ## Technology Stack
 
-- **Backend:** FastAPI, Python
-- **Frontend:** Streamlit
-- **APIs:** Semantic Scholar, Google CSE
-- **Formats:** Markdown, IEEE LaTeX
+| Layer | Technology |
+| ----- | ---------- |
+| Orchestration | LangGraph (StateGraph) |
+| LLM Framework | LangChain (`with_structured_output`) |
+| LLM Provider | Groq — `llama-3.3-70b-versatile` |
+| Embeddings | SentenceTransformers — `BAAI/bge-small-en-v1.5` (local, no API key) |
+| Paper Source | ArXiv API (free, no key required) |
+| Backend | FastAPI + Uvicorn |
+| Frontend | Streamlit |
+| PDF Parsing | pypdf |
+| LaTeX Format | IEEEtran (bundled) |
 
 ---
 
-## User Workflow 
+## Project Structure
 
-**Enter Research Topic** :
-The user inputs a research topic in the Streamlit interface.
+```text
+ResearchAgentAssistant/
+├── backend/
+│   ├── app.py                     # FastAPI app + LangGraph pipeline
+│   ├── agents/
+│   │   ├── retrieval_agent.py     # ArXiv paper fetching
+│   │   ├── rag_agent.py           # PDF download, chunking, embedding
+│   │   ├── summarizer_agent.py    # LangChain structured paper analysis
+│   │   ├── evaluator_agent.py     # LangChain quality evaluation
+│   │   ├── designer_agent.py      # Experiment design plan
+│   │   ├── report_writer_agent.py # Report assembly
+│   │   └── memory_agent.py        # JSON persistence
+│   ├── tools/
+│   │   ├── memory_store.py        # In-process RAM store (topic → data)
+│   │   ├── markdown_builder.py    # Sections dict → Markdown
+│   │   ├── latex_ieee_builder.py  # Sections dict → IEEE LaTeX + BibTeX
+│   │   └── report_history.py      # Report history management
+│   ├── assets/
+│   │   └── IEEEtran.cls           # Bundled IEEE LaTeX class file
+│   ├── Dockerfile
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/
+│   ├── app.py                     # Streamlit UI
+│   ├── Dockerfile
+│   └── requirements.txt
+└── requirements.txt               # Combined root requirements
+```
 
-**Run the AI Research Pipeline** :
-On clicking “Run Research”, the complete multi-agent pipeline is triggered.
+---
 
-**Automated Multi-Agent Execution** : 
-The system sequentially activates:
+## How It Works
 
-**Retrieval Agent** – Fetches real-time research papers from Semantic Scholar
+1. **User enters** a research topic, sets max papers (5–25), years back (1–8), and author info
+2. **RetrievalAgent** queries ArXiv, returns papers filtered by year and relevance
+3. **ResearchRAG** downloads PDFs, extracts text, splits into semantic chunks, and embeds them locally
+4. **SummarizerAgent** queries the RAG store per paper, then calls Groq LLM via LangChain to extract structured analysis (methods, gaps, results, contribution) — followed by one synthesis call that generates the full abstract, introduction, thematic literature review, and conclusion
+5. **EvaluatorAgent** scores each paper summary and the overall analysis using structured LLM output
+6. **DesignerAgent** reads from in-memory store and generates a hypothesis, dataset list, and evaluation metrics
+7. **ReportWriterAgent** assembles the Markdown and LaTeX reports from stored section content
+8. **Frontend** renders the paper preview, offers Markdown download, and packages the LaTeX + IEEEtran.cls + refs.bib into a ZIP for Overleaf
 
-**Summarizer Agent** – Produces structured summaries and extracts key insights
+---
 
-**Evaluator Agent** – Validates research quality and relevance
+## Local Setup
 
-**Designer Agent** – Generates an experimental design
+### Prerequisites
 
-**Report Writer Agent** – Creates:
+- Python 3.10+
+- Conda (recommended) or virtualenv
+- A free [Groq API key](https://console.groq.com)
 
-    A Markdown research report
+### Steps
 
-    An IEEE-compliant LaTeX paper
+```bash
+# 1. Clone
+git clone https://github.com/Kritik2310/ResearchAgentAssistant.git
+cd ResearchAgentAssistant
 
-**Preview & Download** : The user can:
+# 2. Create environment
+conda create -n research python=3.10
+conda activate research
 
-    Preview the paper inside the UI
+# 3. Install dependencies
+pip install -r requirements.txt
 
-    Download the Markdown file
+# 4. Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your GROQ_API_KEY
 
-    Download the Overleaf-ready ZIP (LaTeX + Bib + IEEE class)
+# 5. Start backend (Terminal 1)
+cd backend
+uvicorn app:app --reload --port 8000
 
-**Persistent History** : 
-All generated reports are saved and displayed under Previous Reports for future access.
+# 6. Start frontend (Terminal 2)
+cd frontend
+streamlit run app.py
+# Opens at http://localhost:8501
+```
 
-<p align="center">
-  <img 
-    src="https://github.com/user-attachments/assets/8dabc21b-52d8-4944-895c-9a94a074d7bb"
-    width="200"
-  />
-</p>
+### Environment Variables
 
-## How to Clone & Run the Project
+```env
+# Required
+GROQ_API_KEY=your_groq_api_key
 
-1️⃣ Clone the Repository
+# Optional — for dataset search via Google
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_CSE_ID=your_custom_search_engine_id
 
-    git clone https://github.com/Kritik2310/AI-Research-Paper-Generator.git
+# Optional — override default LLM model
+GROQ_MODEL=llama-3.3-70b-versatile
+```
 
-    cd AI-Research-Paper-Generator
+---
 
-2️⃣ Create Virtual Environment
+## Overleaf Export
 
-    python -m venv .venv
-    .venv\Scripts\activate
+The **Download Overleaf ZIP** button packages three files:
 
-3️⃣ Install Dependencies
+| File | Description |
+|------|-------------|
+| `main.tex` | Full IEEE-format LaTeX paper with your author info |
+| `IEEEtran.cls` | IEEE LaTeX class file (bundled — no download needed) |
+| `refs.bib` | BibTeX references generated from paper metadata |
 
-    pip install -r requirements.txt
+Upload the ZIP directly to [Overleaf](https://overleaf.com) → compile → get a PDF.
 
-4️⃣ Configure Environment Variables
+---
 
-Create a .env file in the root directory:
+## Deployment
 
-    SEMANTIC_SCHOLAR_API_KEY=your_key
-    GEMINI_API_KEY=your_key
-    GOOGLE_API_KEY=your_key
-    GOOGLE_CSE_ID=your_key
+This project is deployed as two separate services on **Hugging Face Spaces**:
 
-5️⃣ Run Backend (FastAPI)
+- **Backend Space** — Docker runtime, exposes the FastAPI server on port 7860
+- **Frontend Space** — Docker runtime, runs the Streamlit app
 
-    uvicorn pipeline:app --reload
+To connect them, set the `BACKEND_URL` secret in the frontend Space:
 
-6️⃣ Run Streamlit UI
+```env
+BACKEND_URL=https://your-backend-space.hf.space
+```
 
-    streamlit run ui.py
+---
 
-----
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/run_pipeline` | Run the full 6-step research pipeline |
+| `POST` | `/download` | Download Markdown report |
+| `POST` | `/download-zip` | Download Overleaf ZIP (LaTeX package) |
+| `GET` | `/history` | List all previously generated reports |
+| `GET` | `/progress/{session_id}` | Poll pipeline step (0–6) |
+| `GET` | `/health` | Health check |
+
+---
+
+## License
+
+MIT License — free to use, modify, and distribute.

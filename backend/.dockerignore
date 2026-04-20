@@ -1,0 +1,39 @@
+## Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+## Environment
+.env
+.env.*
+!.env.example
+
+## Virtual envs
+venv/
+env/
+.venv/
+
+## Data & outputs (regenerated at runtime)
+data/
+outputs/
+
+## Git
+.git/
+.gitignore
+
+## Docs & IDE
+*.md
+.vscode/
+.idea/
+*.code-workspace
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage

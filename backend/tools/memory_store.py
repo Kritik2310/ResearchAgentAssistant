@@ -1,72 +1,74 @@
-#core memory bank where the write and read op of summary and everything occurs
-
 from typing import Dict, Any, List
 
-# Simple in-memory DB, process-wide
 _MEMORY_DB: Dict[str, Dict[str, Any]] = {}
 
 
 def _get_topic_bucket(topic: str) -> Dict[str, Any]:
-    """
-    Ensure a bucket exists for a given topic and return it.
-    """
     if topic not in _MEMORY_DB:
         _MEMORY_DB[topic] = {
             "summaries": [],
             "gaps": [],
             "citations": [],
+            "datasets": [],
+            "baselines": [],
+            "methodology": "",
             "experiment_plan": None,
-            "section_content": {}
+            "section_content": {},
+            "author_info": {},
         }
     return _MEMORY_DB[topic]
 
 
-# ---------- WRITE OPERATIONS ----------
+# ---------- WRITE ----------
 
-def save_summaries(topic: str, summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+def save_summaries(topic: str, summaries: List[Dict[str, Any]]):
     bucket = _get_topic_bucket(topic)
     bucket["summaries"] = summaries
-
-    # Optional: auto-collect gaps & citations from summaries
-    gaps = []
-    citations = []
+    gaps, citations = [], []
     for s in summaries:
         gaps.extend(s.get("gaps", []))
         c = s.get("citations")
         if c:
             citations.append(c)
-
     if gaps:
         bucket["gaps"] = gaps
     if citations:
         bucket["citations"] = citations
 
-    return {"status": "ok"}
+
+def save_gaps(topic: str, gaps: List[str]):
+    _get_topic_bucket(topic)["gaps"] = gaps
 
 
-def save_gaps(topic: str, gaps: List[str]) -> Dict[str, Any]:
-    bucket = _get_topic_bucket(topic)
-    bucket["gaps"] = gaps
-    return {"status": "ok"}
+def save_citations(topic: str, citations: List[Dict[str, Any]]):
+    _get_topic_bucket(topic)["citations"] = citations
 
 
-def save_citations(topic: str, citations: List[Dict[str, Any]]) -> Dict[str, Any]:
-    bucket = _get_topic_bucket(topic)
-    bucket["citations"] = citations
-    return {"status": "ok"}
+def save_experiment_plan(topic: str, plan: Dict[str, Any]):
+    _get_topic_bucket(topic)["experiment_plan"] = plan
 
-
-def save_experiment_plan(topic: str, plan: Dict[str, Any]) -> Dict[str, Any]:
-    bucket = _get_topic_bucket(topic)
-    bucket["experiment_plan"] = plan
-    return {"status": "ok"}
 
 def save_section_content(topic: str, section_content: Dict[str, Any]):
-    bucket = _get_topic_bucket(topic)
-    bucket["section_content"] = section_content
-    return {"status": "ok"}
+    _get_topic_bucket(topic)["section_content"] = section_content
 
-# ---------- READ OPERATIONS ----------
+
+def save_datasets(topic: str, datasets: List[str]):
+    _get_topic_bucket(topic)["datasets"] = datasets
+
+
+def save_methodology(topic: str, methodology: str):
+    _get_topic_bucket(topic)["methodology"] = methodology
+
+
+def save_baselines(topic: str, baselines: List[str]):
+    _get_topic_bucket(topic)["baselines"] = baselines
+
+
+def save_author_info(topic: str, author_info: Dict[str, str]):
+    _get_topic_bucket(topic)["author_info"] = author_info
+
+
+# ---------- READ ----------
 
 def get_summaries(topic: str) -> Dict[str, Any]:
     bucket = _MEMORY_DB.get(topic)
@@ -95,54 +97,29 @@ def get_experiment_plan(topic: str) -> Dict[str, Any]:
         return {"status": "not_found", "experiment_plan": None}
     return {"status": "ok", "experiment_plan": bucket["experiment_plan"]}
 
-def get_section_content(topic: str):
+
+def get_section_content(topic: str) -> Dict[str, Any]:
     bucket = _MEMORY_DB.get(topic)
     if not bucket or not bucket.get("section_content"):
         return {"status": "not_found", "section_content": {}}
     return {"status": "ok", "section_content": bucket["section_content"]}
 
 
-def save_section_content(topic: str, section_content: Dict[str, Any]):
-    bucket = _get_topic_bucket(topic)
-    bucket["section_content"] = section_content
-    return {"status": "ok"}
-
-
-def save_datasets(topic: str, datasets: List[str]):
-    bucket = _get_topic_bucket(topic)
-    bucket["datasets"] = datasets
-    return {"status": "ok"}
-
-
-def save_methodology(topic: str, methodology: str):
-    bucket = _get_topic_bucket(topic)
-    bucket["methodology"] = methodology
-    return {"status": "ok"}
-
-
-def save_baselines(topic: str, baselines: List[str]):
-    bucket = _get_topic_bucket(topic)
-    bucket["baselines"] = baselines
-    return {"status": "ok"}
-
-
-def get_section_content(topic: str):
-    bucket = _MEMORY_DB.get(topic)
-    if not bucket or not bucket.get("section_content"):
-        return {"status": "not_found", "section_content": {}}
-    return {"status": "ok", "section_content": bucket["section_content"]}
-
-
-def get_datasets(topic: str):
+def get_datasets(topic: str) -> List[str]:
     bucket = _MEMORY_DB.get(topic)
     return bucket.get("datasets", []) if bucket else []
 
 
-def get_methodology(topic: str):
+def get_methodology(topic: str) -> str:
     bucket = _MEMORY_DB.get(topic)
     return bucket.get("methodology", "") if bucket else ""
 
 
-def get_baselines(topic: str):
+def get_baselines(topic: str) -> List[str]:
     bucket = _MEMORY_DB.get(topic)
     return bucket.get("baselines", []) if bucket else []
+
+
+def get_author_info(topic: str) -> Dict[str, str]:
+    bucket = _MEMORY_DB.get(topic)
+    return bucket.get("author_info", {}) if bucket else {}
